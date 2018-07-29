@@ -1,12 +1,12 @@
 extern crate chrono;
 
-use std::io::prelude::*;
-use std::net::{TcpListener, TcpStream};
 use std::fs::File;
 use std::io;
+use std::io::prelude::*;
 use std::io::Read;
-use std::str;
+use std::net::{TcpListener, TcpStream};
 use std::result::Result;
+use std::str;
 
 use chrono::prelude::*;
 
@@ -34,18 +34,15 @@ const TEXT_500: &str = "
 </body>
 </html>";
 
-
 fn create_filename(s: String) -> String {
-    let part :String = s[1..].to_string();
+    let part: String = s[1..].to_string();
 
     if part.find('.').is_none() {
         part + ".html"
-    }
-    else {
+    } else {
         part
     }
 }
-
 
 fn load_file(filename: String) -> Result<File, String> {
     // People could pass in '../../rootfile' in here
@@ -61,40 +58,36 @@ fn read_stream<'a>(stream: &'a mut TcpStream) -> String {
     while stream.read(&mut b).is_ok() {
         buf += str::from_utf8(&b).unwrap();
         if buf.ends_with("\r\n\r\n") {
-            break
+            break;
         }
     }
     println!("handle this: {:?}", buf);
     let mut parts = buf.split(' ');
     let _method = parts.next(); // http method: GET / POST / PUT
     let url = parts.next().unwrap(); // PATH
-    return url.to_string()
+    return url.to_string();
 }
 
 fn handle_client(mut stream: TcpStream) {
     let url = read_stream(&mut stream);
     let filename = create_filename(url);
     let file_type = {
-        if filename.ends_with("txt")  {
+        if filename.ends_with("txt") {
             "text/text".to_string()
-        }
-        else if filename.ends_with("html") || filename.ends_with("htm")  {
+        } else if filename.ends_with("html") || filename.ends_with("htm") {
             "text/html".to_string()
-        }
-        else {
+        } else {
             "application/".to_string() + filename.split('.').last().unwrap_or("")
         }
     };
     let file_option = load_file(filename);
 
     let (http_code, data_len) = match file_option {
-        Ok(ref data) => {
-            match data.metadata() {
-                Ok(inner_data) => (format!("HTTP/1.1 200 OK"), inner_data.len() as usize),
-                Err(ref _err) => panic!("Bad things happened")
-            }
+        Ok(ref data) => match data.metadata() {
+            Ok(inner_data) => (format!("HTTP/1.1 200 OK"), inner_data.len() as usize),
+            Err(ref _err) => panic!("Bad things happened"),
         },
-        Err(ref _err) => (format!("HTTP/1.1 404 Not Found"), TEXT_404.len())
+        Err(ref _err) => (format!("HTTP/1.1 404 Not Found"), TEXT_404.len()),
     };
 
     let headers = vec![
@@ -115,32 +108,31 @@ fn handle_client(mut stream: TcpStream) {
             let mut by = io::BufReader::new(d);
             let mut buffer = [0; 10000];
             let mut bytes_read = 10000;
-            let mut result_of_send :Result<(), io::Error> = Result::Err( io::Error::new(io::ErrorKind::Other, "oh no!"));
+            let mut result_of_send: Result<(), io::Error> =
+                Result::Err(io::Error::new(io::ErrorKind::Other, "oh no!"));
 
             while bytes_read == 10000 {
-                let a = by.read(&mut buffer);  //naked unwrap
+                let a = by.read(&mut buffer);
                 match a {
                     Err(e) => {
                         result_of_send = Result::Err(e);
-                    },
+                    }
                     Ok(amount_read) => {
                         result_of_send = stream.write_all(&buffer);
                         bytes_read = amount_read;
                     }
                 }
                 if result_of_send.is_err() {
-                    break
+                    break;
                 }
             }
             result_of_send
-        },
-        Err(_e) => {
-            stream.write_all(TEXT_404.as_bytes())
         }
+        Err(_e) => stream.write_all(TEXT_404.as_bytes()),
     };
     match data_send {
         Ok(_) => println!("Wrote {} bytes to client", data_len),
-        Err(err) => println!("Error writing data to client {:?}", err)
+        Err(err) => println!("Error writing data to client {:?}", err),
     }
 }
 
