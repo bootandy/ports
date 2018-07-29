@@ -109,7 +109,7 @@ fn handle_client(mut stream: TcpStream) {
             let mut buffer = [0; 10000];
             let mut bytes_read = 10000;
             let mut result_of_send: Result<(), io::Error> =
-                Result::Err(io::Error::new(io::ErrorKind::Other, "oh no!"));
+                Result::Err(io::Error::new(io::ErrorKind::Other, "No data read & nothing sent!"));
 
             while bytes_read == 10000 {
                 let a = by.read(&mut buffer);
