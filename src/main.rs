@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::str;
+use std::result::Result;
 
 use chrono::prelude::*;
 
@@ -25,6 +26,14 @@ const TEXT_404: &str = "
 </body>
 </html>";
 
+const TEXT_500: &str = "
+<html>
+<head><title>500 Internal Server Error</title></head>
+<body bgcolor='white'>
+<center><h1>500 Internal Server Error</h1></center>
+</body>
+</html>";
+
 
 fn create_filename(s: String) -> String {
     let part :String = s[1..].to_string();
@@ -37,7 +46,6 @@ fn create_filename(s: String) -> String {
     }
 }
 
-//fn load_file(filename: String) -> Result<u8; 10000], String> {
 
 fn load_file(filename: String) -> Result<File, String> {
     // People could pass in '../../rootfile' in here
@@ -80,7 +88,12 @@ fn handle_client(mut stream: TcpStream) {
     let file_option = load_file(filename);
 
     let (http_code, data_len) = match file_option {
-        Ok(ref data) => (format!("HTTP/1.1 200 OK"), data.metadata().unwrap().len() as usize),  // naked unwrap
+        Ok(ref data) => {
+            match data.metadata() {
+                Ok(inner_data) => (format!("HTTP/1.1 200 OK"), inner_data.len() as usize),
+                Err(ref _err) => panic!("Bad things happened")
+            }
+        },
         Err(ref _err) => (format!("HTTP/1.1 404 Not Found"), TEXT_404.len())
     };
 
@@ -97,40 +110,38 @@ fn handle_client(mut stream: TcpStream) {
         panic!("Error writing to buffer: {}", err)
     };
 
-    match file_option {
+    let data_send = match file_option {
         Ok(d) => {
             let mut by = io::BufReader::new(d);
             let mut buffer = [0; 10000];
             let mut bytes_read = 10000;
+            let mut result_of_send :Result<(), io::Error> = Result::Err( io::Error::new(io::ErrorKind::Other, "oh no!"));
+
             while bytes_read == 10000 {
-                bytes_read = by.read(&mut buffer).unwrap();
-                stream.write_all(&buffer);
-            }
-
-            /*for place in buffer.iter_mut() {
-                let byn = by.next();
-                *place = byn.unwrap().unwrap();
-            }*/
-            /*loop {
-                match by.next() {
-                    None => break,
-                    Some(ref v) => {
-                        buffer[i] = v.unwrap();
-                        i += 1;
+                let a = by.read(&mut buffer);  //naked unwrap
+                match a {
+                    Err(e) => {
+                        result_of_send = Result::Err(e);
                     },
+                    Ok(amount_read) => {
+                        result_of_send = stream.write_all(&buffer);
+                        bytes_read = amount_read;
+                    }
                 }
-            }*/
-
-            //let mut buffer2 = Vec::new();
-            //let n = d.read_to_end(&mut buffer2).expect("Bad things");
-            //by.read(&mut buffer);
-            //let byc = &by.collect::<[u8, std::io::Error>>();
-            //byc.unwrap():Weekday
-        },  //naked unwrap
+                if result_of_send.is_err() {
+                    break
+                }
+            }
+            result_of_send
+        },
         Err(_e) => {
-            stream.write_all(TEXT_404.as_bytes());
+            stream.write_all(TEXT_404.as_bytes())
         }
     };
+    match data_send {
+        Ok(_) => println!("Wrote {} bytes to client", data_len),
+        Err(err) => println!("Error writing data to client {:?}", err)
+    }
 }
 
 fn main() -> io::Result<()> {
